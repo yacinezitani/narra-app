@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Narra · Read-along TTS</title>
+<link rel="icon" type="image/svg+xml" href="/logo.svg" />
+<style>
+  :root {
+    --bg: #f4f5f8;
+    --surface: #ffffff;
+    --ink: #1c2128;
+    --ink-soft: #5b6470;
+    --muted: #98a1ad;
+    --line: #e6e9ef;
+    --line-soft: #eef0f4;
+    --accent: #2f6bff;
+    --accent-soft: #eaf1ff;
+    --highlight: #bfe3c6;       /* spoken-word background */
+    --highlight-strong: #6fc07e;/* active word */
+    --shadow: 0 1px 2px rgba(16,24,40,.04), 0 12px 32px rgba(16,24,40,.08);
+    --radius: 14px;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1014; --surface: #161a20; --ink: #e9edf2; --ink-soft: #aeb6c2;
+    --muted: #707a88; --line: #252b33; --line-soft: #1e242b;
+    --accent: #5b8cff; --accent-soft: #1b2740;
+    --highlight: #2c4a36; --highlight-strong: #57a368;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 16px 40px rgba(0,0,0,.45);
+  }
+  html { color-scheme: light; }
+  html[data-theme="dark"] { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ───── Top toolbar ───── */
+  .toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    z-index: 10;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; min-width: 150px; }
+  .brand .mark {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: linear-gradient(145deg, #2F6BFF, #7C5CFF);
+    display: grid; place-items: center; flex: none;
+  }
+  .brand .mark svg { width: 17px; height: 17px; }
+  .brand b { font-size: 14.5px; font-weight: 650; letter-spacing: -.01em; }
+  .brand small { display: block; font-size: 10.5px; color: var(--muted); margin-top: -1px; }
+
+  .transport { display: flex; align-items: center; gap: 8px; }
+  .iconbtn {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+    display: grid; place-items: center; cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s, transform .06s;
+  }
+  .iconbtn:hover { background: var(--line-soft); color: var(--ink); }
+  .iconbtn:active { transform: scale(.94); }
+  .iconbtn:disabled { opacity: .4; cursor: default; }
+  .iconbtn svg { width: 18px; height: 18px; }
+  .play {
+    width: 46px; height: 46px;
+    background: var(--accent); color: #fff; border: none;
+    box-shadow: 0 6px 16px rgba(47,107,255,.35);
+  }
+  .play:hover { background: var(--accent); filter: brightness(1.05); color: #fff; }
+  .play svg { width: 20px; height: 20px; }
+
+  .timeline-wrap { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; width: 42px; }
+  .time.right { text-align: right; }
+  .track {
+    position: relative; flex: 1; height: 18px; cursor: pointer; min-width: 80px;
+    display: flex; align-items: center;
+  }
+  .track .rail { position: absolute; left: 0; right: 0; height: 4px; border-radius: 4px; background: var(--line); }
+  .track .fill { position: absolute; left: 0; height: 4px; border-radius: 4px; background: var(--accent); width: 0; }
+  .track .mark {        /* sentence boundary tick */
+    position: absolute; top: 50%; width: 2px; height: 9px; margin-top: -4.5px;
+    background: var(--muted); opacity: .4; border-radius: 2px; pointer-events: none;
+  }
+  .track .knob {
+    position: absolute; width: 13px; height: 13px; border-radius: 50%;
+    background: #fff; border: 2px solid var(--accent); margin-left: -6.5px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.2); left: 0;
+  }
+
+  .ctrl { display: flex; align-items: center; gap: 10px; min-width: 150px; justify-content: flex-end; }
+  select {
+    appearance: none; background: var(--surface); border: 1px solid var(--line);
+    color: var(--ink); font-size: 12.5px; font-family: inherit;
+    padding: 8px 28px 8px 11px; border-radius: 9px; cursor: pointer; outline: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2398a1ad' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 9px center; max-width: 150px;
+  }
+  select:focus { border-color: var(--accent); }
+  .speed-btn {
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+    font-size: 12.5px; font-weight: 600; padding: 8px 11px; border-radius: 9px;
+    cursor: pointer; font-variant-numeric: tabular-nums; min-width: 44px;
+  }
+  .speed-btn:hover { background: var(--line-soft); color: var(--ink); }
+
+  /* ───── Stage ───── */
+  .stage { flex: 1; overflow-y: auto; padding: 36px 20px 80px; }
+  .doc {
+    max-width: 760px; margin: 0 auto;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 44px 52px; position: relative; min-height: 320px;
+  }
+  .doc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .doc-head .label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .edit-toggle {
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+    font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .edit-toggle:hover { background: var(--line-soft); color: var(--ink); }
+  .edit-toggle svg { width: 13px; height: 13px; }
+
+  textarea {
+    width: 100%; min-height: 340px; resize: vertical; border: none; outline: none;
+    background: transparent; color: var(--ink);
+    font-family: "Georgia", "Times New Roman", serif; font-size: 19px; line-height: 1.75;
+  }
+  textarea::placeholder { color: var(--muted); }
+
+  .reader {
+    font-family: "Georgia", "Times New Roman", serif;
+    font-size: 19px; line-height: 1.85; color: var(--ink);
+    white-space: pre-wrap; word-wrap: break-word;
+  }
+  .reader.hidden, textarea.hidden { display: none; }
+  .reader w {
+    border-radius: 4px; padding: 1px 0; cursor: pointer;
+    transition: background-color .12s ease, color .12s ease;
+  }
+  .reader w.spoken { background: var(--highlight); }
+  .reader w.active {
+    background: var(--highlight-strong);
+    color: #07210d; box-shadow: 0 0 0 1px var(--highlight-strong);
+  }
+  :root[data-theme="dark"] .reader w.active { color: #eafff0; }
+  .reader w:not(.untimed):hover { background: var(--accent-soft); }
+
+  .empty { color: var(--muted); font-style: italic; }
+
+  /* loading overlay */
+  .overlay {
+    position: absolute; inset: 0; background: color-mix(in srgb, var(--surface) 78%, transparent);
+    border-radius: var(--radius); display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 14px; backdrop-filter: blur(2px); z-index: 5;
+  }
+  .overlay.show { display: flex; }
+  .spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .overlay span { font-size: 13px; color: var(--ink-soft); }
+
+  .toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #2a2f37; color: #fff; font-size: 13px; padding: 11px 18px; border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.25); opacity: 0; pointer-events: none; transition: .25s; z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .hint { text-align: center; color: var(--muted); font-size: 12px; margin-top: 16px; }
+  kbd { font-family: inherit; background: var(--line-soft); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font-size: 11px; }
+</style>
+<script>
+  // Resolve and apply the theme before first paint to avoid a flash.
+  (function () {
+    var saved = localStorage.getItem("narra-theme");
+    var theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="brand">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M3 10v4M7 6v12M11 3v18M15 7v10M19 10v4"/></svg>
+    </div>
+    <div><b>Narra</b><small id="status">Read-along · MLX</small></div>
+  </div>
+
+  <div class="transport">
+    <button class="iconbtn" id="back" title="Back 10s" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg>
+    </button>
+    <button class="iconbtn play" id="play" title="Play / Pause" disabled>
+      <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <button class="iconbtn" id="fwd" title="Forward 10s" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 17l5-5-5-5M6 17l5-5-5-5"/></svg>
+    </button>
+  </div>
+
+  <div class="timeline-wrap">
+    <span class="time" id="cur">00:00</span>
+    <div class="track" id="track">
+      <div class="rail"></div>
+      <div class="fill" id="fill"></div>
+      <div class="knob" id="knob"></div>
+    </div>
+    <span class="time right" id="dur">00:00</span>
+  </div>
+
+  <div class="ctrl">
+    <button class="iconbtn" id="theme" title="Toggle light / dark">
+      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+    </button>
+    <button class="speed-btn" id="speedBtn" title="Playback speed">1.0×</button>
+    <select id="voice" title="Voice"></select>
+  </div>
+</div>
+
+<div class="stage" id="stage">
+  <div class="doc">
+    <div class="doc-head">
+      <span class="label" id="docLabel">Editor</span>
+      <button class="edit-toggle" id="toggle">
+        <svg id="toggleIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg>
+        <span id="toggleLabel">Generate &amp; Read</span>
+      </button>
+    </div>
+
+    <textarea id="text" placeholder="Type or paste text here, then press “Generate &amp; Read”…">Welcome to Narra. This is the simplest way to turn any text into natural speech — running entirely on your own machine.
+
+Every word is highlighted as it is spoken, in perfect sync with the audio. Click any word to jump straight to it, scrub the timeline, or change the voice and speed.
+
+Because everything runs locally with Apple MLX, your text never leaves your computer. No accounts, no API keys, no limits.</textarea>
+
+    <div class="reader hidden" id="reader"></div>
+
+    <div class="overlay" id="overlay">
+      <div class="spinner"></div>
+      <span id="overlayMsg">Synthesizing speech…</span>
+    </div>
+  </div>
+  <div class="hint"><kbd>Space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> seek · <kbd>⌘</kbd>+<kbd>Enter</kbd> generate</div>
+</div>
+
+<audio id="audio"></audio>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const audio = $("audio"), reader = $("reader"), textarea = $("text");
+const playBtn = $("play"), playIcon = $("playIcon"), backBtn = $("back"), fwdBtn = $("fwd");
+const track = $("track"), fill = $("fill"), knob = $("knob"), curEl = $("cur"), durEl = $("dur");
+const voiceSel = $("voice"), speedBtn = $("speedBtn"), toggle = $("toggle"), toggleLabel = $("toggleLabel"), toggleIcon = $("toggleIcon");
+const overlay = $("overlay"), overlayMsg = $("overlayMsg"), docLabel = $("docLabel"), toast = $("toast");
+const statusEl = $("status");
+const themeBtn = $("theme"), themeIcon = $("themeIcon");
+
+/* ── light / dark theme ── */
+const SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+const MOON = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>';
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  // Show the icon for the theme you'd switch *to*.
+  themeIcon.innerHTML = theme === "dark" ? SUN : MOON;
+  themeBtn.title = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+}
+applyTheme(document.documentElement.getAttribute("data-theme") || "light");
+themeBtn.addEventListener("click", () => {
+  const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  localStorage.setItem("narra-theme", next);
+  applyTheme(next);
+});
+
+const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
+let speedIdx = 1;
+let tokens = [];          // [{t, ws, s, e, el}]
+let timed = [];           // tokens that have timestamps (for active lookup)
+let activeIdx = -1;
+let mode = "edit";        // "edit" | "read"
+let lastText = "", lastVoice = "", dirty = true;
+let inFlight = null;      // AbortController for the current /api/tts request
+
+/* ── helpers ── */
+const fmt = (s) => {
+  if (!isFinite(s)) s = 0;
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
+};
+function showToast(msg) {
+  toast.textContent = msg; toast.classList.add("show");
+  clearTimeout(showToast._t); showToast._t = setTimeout(() => toast.classList.remove("show"), 3200);
+}
+
+/* ── voices ── */
+async function loadVoices() {
+  try {
+    const { voices } = await (await fetch("/api/voices")).json();
+    let group = "";
+    voices.forEach(v => {
+      const g = `${v.accent} · ${v.gender}`;
+      if (g !== group) { const og = document.createElement("optgroup"); og.label = g; voiceSel.appendChild(og); group = g; }
+      const o = document.createElement("option"); o.value = v.id; o.textContent = v.name;
+      voiceSel.lastChild.appendChild(o);
+    });
+    voiceSel.value = "af_heart";
+  } catch { showToast("Cannot reach server on :8000"); }
+}
+
+/* ── render reader tokens ── */
+function renderTokens(toks) {
+  reader.innerHTML = "";
+  tokens = []; timed = [];
+  const frag = document.createDocumentFragment();
+  for (const tk of toks) {
+    if (tk.t === "") { if (tk.ws) frag.appendChild(document.createTextNode(tk.ws)); continue; }
+    const w = document.createElement("w");
+    w.textContent = tk.t;
+    const has = tk.s != null && tk.e != null;
+    if (!has) w.classList.add("untimed");
+    const entry = { ...tk, el: w };
+    if (has) { w.dataset.i = timed.length; timed.push(entry); }
+    tokens.push(entry);
+    frag.appendChild(w);
+    if (tk.ws) frag.appendChild(document.createTextNode(tk.ws));
+  }
+  reader.appendChild(frag);
+}
+
+/* ── sentence markers on the timeline ── */
+function renderMarks(duration) {
+  track.querySelectorAll(".mark").forEach(m => m.remove());
+  if (!duration) return;
+  for (const tk of timed) {
+    if (/[.!?]$/.test(tk.t) && tk.e < duration - 0.05) {
+      const m = document.createElement("div");
+      m.className = "mark"; m.style.left = `${(tk.e / duration) * 100}%`;
+      track.appendChild(m);
+    }
+  }
+}
+
+/* ── active-word highlighting ── */
+function updateActive(t) {
+  // binary search the timed tokens for the one covering time t
+  let lo = 0, hi = timed.length - 1, found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1, tk = timed[mid];
+    if (t < tk.s) hi = mid - 1;
+    else if (t >= tk.e) lo = mid + 1;
+    else { found = mid; break; }
+  }
+  if (found === activeIdx) return;
+  if (activeIdx >= 0 && timed[activeIdx]) timed[activeIdx].el.classList.remove("active");
+  activeIdx = found;
+  if (found >= 0) {
+    const el = timed[found].el;
+    el.classList.add("active");
+    // mark everything up to here as spoken
+    for (let i = 0; i < timed.length; i++) timed[i].el.classList.toggle("spoken", i < found);
+    const r = el.getBoundingClientRect(), stage = $("stage").getBoundingClientRect();
+    if (r.top < stage.top + 90 || r.bottom > stage.bottom - 60)
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+}
+
+/* ── generation ── */
+async function generate() {
+  const text = textarea.value.trim();
+  if (!text) { showToast("Enter some text first."); return; }
+  const voice = voiceSel.value;
+
+  // Cancel any request already running (e.g. rapid voice switching).
+  if (inFlight) inFlight.abort();
+  const ctrl = new AbortController();
+  inFlight = ctrl;
+
+  audio.pause();
+  overlay.classList.add("show");
+  overlayMsg.textContent = "Synthesizing speech…";
+  try {
+    const res = await fetch("/api/tts", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voice, speed: 1.0 }),
+      signal: ctrl.signal
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `Error ${res.status}`); }
+    const data = await res.json();
+    if (ctrl.signal.aborted) return;               // superseded by a newer request
+
+    renderTokens(data.tokens);
+    audio.src = "data:audio/wav;base64," + data.audio;
+    audio.playbackRate = SPEEDS[speedIdx];
+    await new Promise((resolve, reject) => {
+      audio.onloadedmetadata = resolve;
+      audio.onerror = () => reject(new Error("Could not load audio"));
+    });
+    durEl.textContent = fmt(data.duration);
+    renderMarks(data.duration);
+    activeIdx = -1;
+    fill.style.width = "0%"; knob.style.left = "0%"; curEl.textContent = "00:00";
+    lastText = text; lastVoice = voice; dirty = false;
+    enterRead();
+    audio.play();
+  } catch (e) {
+    if (e.name === "AbortError") return;            // expected on switch — stay quiet
+    showToast(e.message);
+  } finally {
+    if (inFlight === ctrl) { inFlight = null; overlay.classList.remove("show"); }
+  }
+}
+
+/* ── view modes ── */
+function enterRead() {
+  mode = "read";
+  textarea.classList.add("hidden"); reader.classList.remove("hidden");
+  docLabel.textContent = "Now Reading";
+  toggleLabel.textContent = "Edit Text";
+  toggleIcon.innerHTML = '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>';
+  [playBtn, backBtn, fwdBtn].forEach(b => b.disabled = false);
+}
+function enterEdit() {
+  mode = "edit";
+  audio.pause();
+  reader.classList.add("hidden"); textarea.classList.remove("hidden");
+  docLabel.textContent = "Editor";
+  toggleLabel.textContent = "Generate & Read";
+  toggleIcon.innerHTML = '<path d="M5 3l14 9-14 9V3z"/>';
+  [playBtn, backBtn, fwdBtn].forEach(b => b.disabled = true);
+}
+function toggleMode() {
+  if (mode === "edit") {
+    // regenerate if nothing yet, or text/voice changed
+    if (dirty || textarea.value.trim() !== lastText || voiceSel.value !== lastVoice || !audio.src) generate();
+    else enterRead();
+  } else enterEdit();
+}
+
+/* ── transport ── */
+function togglePlay() {
+  if (mode !== "read") return;
+  if (audio.paused) audio.play(); else audio.pause();
+}
+function setPlayIcon(playing) {
+  playIcon.innerHTML = playing
+    ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
+    : '<path d="M8 5v14l11-7z"/>';
+}
+function cycleSpeed() {
+  speedIdx = (speedIdx + 1) % SPEEDS.length;
+  const s = SPEEDS[speedIdx];
+  speedBtn.textContent = (Number.isInteger(s) ? s.toFixed(1) : s) + "×";
+  audio.playbackRate = s;
+}
+
+/* ── seeking ── */
+function seekFromEvent(e) {
+  const rect = track.getBoundingClientRect();
+  const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+  if (audio.duration) audio.currentTime = ratio * audio.duration;
+}
+let scrubbing = false;
+track.addEventListener("mousedown", (e) => { if (!playBtn.disabled) { scrubbing = true; seekFromEvent(e); } });
+window.addEventListener("mousemove", (e) => { if (scrubbing) seekFromEvent(e); });
+window.addEventListener("mouseup", () => { scrubbing = false; });
+
+/* ── audio events ── */
+audio.addEventListener("timeupdate", () => {
+  const d = audio.duration || 0, t = audio.currentTime;
+  const pct = d ? (t / d) * 100 : 0;
+  fill.style.width = pct + "%"; knob.style.left = pct + "%";
+  curEl.textContent = fmt(t);
+  updateActive(t);
+});
+audio.addEventListener("play", () => setPlayIcon(true));
+audio.addEventListener("pause", () => setPlayIcon(false));
+audio.addEventListener("ended", () => { setPlayIcon(false); });
+
+/* click a word → seek */
+reader.addEventListener("click", (e) => {
+  const w = e.target.closest("w"); if (!w || w.classList.contains("untimed")) return;
+  const tk = timed[Number(w.dataset.i)];
+  if (tk && audio.duration) { audio.currentTime = tk.s; if (audio.paused) audio.play(); }
+});
+
+/* ── wiring ── */
+playBtn.addEventListener("click", togglePlay);
+backBtn.addEventListener("click", () => audio.currentTime = Math.max(0, audio.currentTime - 10));
+fwdBtn.addEventListener("click", () => audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10));
+speedBtn.addEventListener("click", cycleSpeed);
+toggle.addEventListener("click", toggleMode);
+textarea.addEventListener("input", () => { dirty = true; });
+// Switching voice re-synthesizes immediately with the same text.
+voiceSel.addEventListener("change", () => {
+  dirty = true;
+  if (mode === "read" || audio.src) generate();
+});
+
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); generate(); return; }
+  if (e.target === textarea) return;
+  if (e.code === "Space") { e.preventDefault(); togglePlay(); }
+  else if (e.key === "ArrowLeft" && !backBtn.disabled) { e.preventDefault(); audio.currentTime = Math.max(0, audio.currentTime - 5); }
+  else if (e.key === "ArrowRight" && !fwdBtn.disabled) { e.preventDefault(); audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 5); }
+});
+
+/* ── warmup status (so the user knows when it's instant-ready) ── */
+async function pollWarmup() {
+  try {
+    const h = await (await fetch("/api/health")).json();
+    const w = h.warmup || {};
+    if (w.ready) { statusEl.textContent = "Ready · MLX"; return; }
+    if (w.engine) statusEl.textContent = `Loading voices ${w.voices_ready}/${w.voices_total}…`;
+    else if (w.model) statusEl.textContent = "Warming engine…";
+    else statusEl.textContent = "Loading model…";
+  } catch { statusEl.textContent = "Offline"; }
+  setTimeout(pollWarmup, 1200);
+}
+
+loadVoices();
+pollWarmup();
+</script>
+</body>
+</html>

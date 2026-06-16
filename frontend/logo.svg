@@ -1,0 +1,16 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Narra">
+  <defs>
+    <linearGradient id="narra" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2F6BFF"/>
+      <stop offset="1" stop-color="#7C5CFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="24" fill="url(#narra)"/>
+  <g stroke="#fff" stroke-width="6" stroke-linecap="round">
+    <path d="M24 40v16"/>
+    <path d="M36 30v36"/>
+    <path d="M48 20v56"/>
+    <path d="M60 30v36"/>
+    <path d="M72 40v16"/>
+  </g>
+</svg>
