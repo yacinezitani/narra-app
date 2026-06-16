@@ -126,6 +126,9 @@
     padding: 44px 52px; position: relative; min-height: 320px;
   }
   .doc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .doc-actions { display: flex; align-items: center; gap: 8px; }
+  .edit-toggle[hidden] { display: none; }
+  .edit-toggle:disabled { opacity: .55; cursor: default; }
   .doc-head .label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
   .edit-toggle {
     border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
@@ -237,10 +240,16 @@
   <div class="doc">
     <div class="doc-head">
       <span class="label" id="docLabel">Editor</span>
-      <button class="edit-toggle" id="toggle">
-        <svg id="toggleIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg>
-        <span id="toggleLabel">Generate &amp; Read</span>
-      </button>
+      <div class="doc-actions">
+        <button class="edit-toggle" id="download" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          <span id="downloadLabel">Download MP3</span>
+        </button>
+        <button class="edit-toggle" id="toggle">
+          <svg id="toggleIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg>
+          <span id="toggleLabel">Generate &amp; Read</span>
+        </button>
+      </div>
     </div>
 
     <textarea id="text" placeholder="Type or paste text here, then press “Generate &amp; Read”…">Welcome to Narra. This is the simplest way to turn any text into natural speech — running entirely on your own machine.
@@ -268,6 +277,7 @@ const audio = $("audio"), reader = $("reader"), textarea = $("text");
 const playBtn = $("play"), playIcon = $("playIcon"), backBtn = $("back"), fwdBtn = $("fwd");
 const track = $("track"), fill = $("fill"), knob = $("knob"), curEl = $("cur"), durEl = $("dur");
 const voiceSel = $("voice"), speedBtn = $("speedBtn"), toggle = $("toggle"), toggleLabel = $("toggleLabel"), toggleIcon = $("toggleIcon");
+const downloadBtn = $("download"), downloadLabel = $("downloadLabel");
 const overlay = $("overlay"), overlayMsg = $("overlayMsg"), docLabel = $("docLabel"), toast = $("toast");
 const statusEl = $("status");
 const themeBtn = $("theme"), themeIcon = $("themeIcon");
@@ -296,6 +306,7 @@ let activeIdx = -1;
 let mode = "edit";        // "edit" | "read"
 let lastText = "", lastVoice = "", dirty = true;
 let inFlight = null;      // AbortController for the current /api/tts request
+let lastAudioB64 = null;  // base64 WAV of the current clip, for MP3 download
 
 /* ── helpers ── */
 const fmt = (s) => {
@@ -405,6 +416,7 @@ async function generate() {
     if (ctrl.signal.aborted) return;               // superseded by a newer request
 
     renderTokens(data.tokens);
+    lastAudioB64 = data.audio;
     audio.src = "data:audio/wav;base64," + data.audio;
     audio.playbackRate = SPEEDS[speedIdx];
     await new Promise((resolve, reject) => {
@@ -434,6 +446,7 @@ function enterRead() {
   toggleLabel.textContent = "Edit Text";
   toggleIcon.innerHTML = '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>';
   [playBtn, backBtn, fwdBtn].forEach(b => b.disabled = false);
+  downloadBtn.hidden = !lastAudioB64;
 }
 function enterEdit() {
   mode = "edit";
@@ -443,6 +456,7 @@ function enterEdit() {
   toggleLabel.textContent = "Generate & Read";
   toggleIcon.innerHTML = '<path d="M5 3l14 9-14 9V3z"/>';
   [playBtn, backBtn, fwdBtn].forEach(b => b.disabled = true);
+  downloadBtn.hidden = true;
 }
 function toggleMode() {
   if (mode === "edit") {
@@ -450,6 +464,36 @@ function toggleMode() {
     if (dirty || textarea.value.trim() !== lastText || voiceSel.value !== lastVoice || !audio.src) generate();
     else enterRead();
   } else enterEdit();
+}
+
+/* ── download MP3 ── */
+function fileBase() {
+  // a friendly filename from the first few words
+  const words = (lastText || "narra").trim().split(/\s+/).slice(0, 5).join("-");
+  return (words.replace(/[^\w\-]+/g, "").toLowerCase() || "narra").slice(0, 40);
+}
+async function downloadMp3() {
+  if (!lastAudioB64 || downloadBtn.disabled) return;
+  const wav = Uint8Array.from(atob(lastAudioB64), c => c.charCodeAt(0));
+  downloadBtn.disabled = true;
+  downloadLabel.textContent = "Preparing…";
+  try {
+    const res = await fetch("/api/transcode", {
+      method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav
+    });
+    if (!res.ok) throw new Error("Transcode failed");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fileBase() + ".mp3";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) {
+    showToast("Could not create MP3.");
+  } finally {
+    downloadBtn.disabled = false;
+    downloadLabel.textContent = "Download MP3";
+  }
 }
 
 /* ── transport ── */
@@ -505,6 +549,7 @@ backBtn.addEventListener("click", () => audio.currentTime = Math.max(0, audio.cu
 fwdBtn.addEventListener("click", () => audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10));
 speedBtn.addEventListener("click", cycleSpeed);
 toggle.addEventListener("click", toggleMode);
+downloadBtn.addEventListener("click", downloadMp3);
 textarea.addEventListener("input", () => { dirty = true; });
 // Switching voice re-synthesizes immediately with the same text.
 voiceSel.addEventListener("change", () => {

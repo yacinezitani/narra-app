@@ -11,15 +11,16 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import re
 import threading
 from pathlib import Path
 
 import mlx.core as mx
 import numpy as np
 import soundfile as sf
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from mlx_audio.tts.utils import load_model
@@ -185,29 +186,42 @@ def synthesize(text: str, voice: str, speed: float) -> tuple[np.ndarray, list[di
     tokens: list[dict] = []
     offset = 0.0  # seconds of audio emitted so far
 
+    # Kokoro splits on newlines and discards them, which flattens the document.
+    # We split here while keeping the separators, feed each paragraph to the
+    # pipeline individually, and re-insert the line breaks as structural tokens
+    # so the reader preserves the original paragraph formatting.
+    parts = re.split(r"(\n+)", text)
+
     with _model_lock:
         pipeline = model._get_pipeline(lang_code)
         # NB: do NOT clear pipeline.voices here — keeping the cache means a voice
         # pack is loaded once and reused, instead of reloaded (~3s) every request.
-        for res in pipeline(text, voice=voice, speed=speed):
-            audio = res.audio
-            if audio is None:
+        for part in parts:
+            if part == "":
                 continue
-            wav = np.asarray(audio, dtype=np.float32).reshape(-1)
-            for tok in res.tokens or []:
-                start = tok.start_ts
-                end = tok.end_ts
-                tokens.append(
-                    {
-                        "t": tok.text,
-                        "ws": tok.whitespace,
-                        # null when the model didn't time this token (rare punctuation)
-                        "s": round(offset + start, 3) if start is not None else None,
-                        "e": round(offset + end, 3) if end is not None else None,
-                    }
-                )
-            chunks.append(wav)
-            offset += len(wav) / SAMPLE_RATE
+            if part.strip() == "":
+                # a run of newlines — a structural break, no audio
+                tokens.append({"t": "", "ws": part, "s": None, "e": None})
+                continue
+            for res in pipeline(part, voice=voice, speed=speed):
+                audio = res.audio
+                if audio is None:
+                    continue
+                wav = np.asarray(audio, dtype=np.float32).reshape(-1)
+                for tok in res.tokens or []:
+                    start = tok.start_ts
+                    end = tok.end_ts
+                    tokens.append(
+                        {
+                            "t": tok.text,
+                            "ws": tok.whitespace,
+                            # null when the model didn't time this token (rare punctuation)
+                            "s": round(offset + start, 3) if start is not None else None,
+                            "e": round(offset + end, 3) if end is not None else None,
+                        }
+                    )
+                chunks.append(wav)
+                offset += len(wav) / SAMPLE_RATE
 
     if not chunks:
         raise HTTPException(500, "Model produced no audio")
@@ -260,6 +274,30 @@ def tts(req: TTSRequest):
         "duration": round(len(wav) / SAMPLE_RATE, 3),
         "tokens": tokens,
     }
+
+
+@app.post("/api/transcode")
+async def transcode(request: Request):
+    """Convert the already-generated WAV (raw request body) to MP3.
+
+    Transcoding the exact audio the client holds — rather than re-synthesizing —
+    means the download matches what the user heard, with no extra model run.
+    """
+    raw = await request.body()
+    if not raw:
+        raise HTTPException(400, "Empty audio body")
+    try:
+        data, sr = sf.read(io.BytesIO(raw), dtype="float32")
+    except Exception:
+        raise HTTPException(400, "Could not read audio (expected WAV)")
+
+    out = io.BytesIO()
+    sf.write(out, data, sr, format="MP3")
+    return Response(
+        content=out.getvalue(),
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": 'attachment; filename="narra.mp3"'},
+    )
 
 
 @app.get("/")
