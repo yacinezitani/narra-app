@@ -1,13 +1,19 @@
 # Netlify deploy of the Narra frontend only (static, no build).
 # The TTS backend is NOT deployed here — it runs on Hugging Face Spaces.
-# Point frontend/config.js at that Space URL before deploying.
+#
+# IMPORTANT: base = "frontend" so Netlify treats that folder as the project root.
+# Without it, Netlify finds the backend's requirements.txt at the repo root,
+# assumes a Python project, and runs `pip install` (which fails — those are
+# Mac-only deps Netlify must never touch). With base set, it only sees the static
+# files in frontend/ and skips dependency installation entirely.
 
 [build]
-  publish = "frontend"
+  base = "frontend"
+  publish = "."
   command = ""
 
-# Long-cache the static assets, but always revalidate the HTML and the runtime
-# config so a backend-URL change goes live immediately.
+# Long-cache static assets, but always revalidate the HTML and runtime config so
+# a backend-URL change goes live immediately. Paths are relative to the site root.
 [[headers]]
   for = "/config.js"
   [headers.values]
