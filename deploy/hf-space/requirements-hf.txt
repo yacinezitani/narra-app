@@ -1,0 +1,22 @@
+# Dependencies for the hosted (PyTorch CPU) backend on Hugging Face Spaces.
+# NOTE: this is the cloud counterpart to the repo-root requirements.txt, which
+# pins mlx-audio for local Apple-Silicon dev. Do not mix the two — MLX won't
+# install on the Linux Space, and torch isn't needed on the Mac.
+
+# CPU-only PyTorch wheels (no CUDA) keep the image small and free-tier friendly.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.4.1
+
+# Official Kokoro pipeline — exposes per-word timestamps (the read-along moat).
+kokoro==0.9.4
+misaki[en]==0.9.4
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+soundfile==0.13.1
+numpy
+
+# SaaS layer (auth/quota/billing).
+httpx==0.28.1
+pyjwt==2.10.1
+stripe==11.4.1

@@ -26,9 +26,14 @@ on Apple [MLX](https://github.com/ml-explore/mlx). No cloud, no API keys, no lim
   alignment (`pred_dur`), so it's exact, not guessed.
 - **👆 Click-to-seek** — click any word to jump the audio straight to it.
 - **🎛️ Pro transport** — play/pause, ±10 s skip, a scrubbable timeline with sentence
-  markers, playback-speed control, and 24 American/British voices.
-- **🌗 Light & dark mode** — one-click toggle, remembers your choice, follows your
-  system theme by default.
+  markers, and a download-to-MP3 button.
+- **🗣️ Voice picker with previews** — 24 American/British voices, each with a ▶ button
+  to audition a sample before choosing.
+- **⏩ Speed control** — preset chips (0.75×–2×) **plus** a slider for any custom rate,
+  applied live without re-synthesizing.
+- **🌗 Light & dark mode** — one-click toggle, follows your system theme by default.
+- **💾 Remembers your session** — your text, voice, and speed are saved locally and
+  restored on reload.
 - **⚡ Fast** — voices and engine pre-warm at startup; warm synthesis runs several
   times faster than real-time (a paragraph in ~2 s).
 - **🔒 Private** — your text never leaves your machine.

@@ -4,3 +4,9 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 soundfile==0.13.1
 numpy
+
+# SaaS layer (auth/quota/billing). Harmless in local dev — the features stay
+# off until the SUPABASE_* / STRIPE_* env vars are set.
+httpx==0.28.1
+pyjwt==2.10.1
+stripe==11.4.1

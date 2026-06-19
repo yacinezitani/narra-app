@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": null,
+  "installCommand": null,
+  "outputDirectory": "frontend",
+  "cleanUrls": true,
+  "comment": "Static deploy of the Narra frontend only. The TTS backend is NOT deployed here (it can't run on serverless) — it lives on Hugging Face Spaces. Point frontend/config.js at that Space URL before deploying."
+}

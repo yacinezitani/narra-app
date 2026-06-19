@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Narra · Read-along TTS</title>
 <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+<!-- Backend API location. Edit config.js (not this file) per deployment:
+     same-origin for local dev, the HF Space URL for the static prod deploy. -->
+<script src="/config.js"></script>
 <style>
   :root {
     --bg: #f4f5f8;
@@ -116,6 +119,75 @@
     cursor: pointer; font-variant-numeric: tabular-nums; min-width: 44px;
   }
   .speed-btn:hover { background: var(--line-soft); color: var(--ink); }
+  .speed-btn.custom { border-color: var(--accent); color: var(--accent); }
+
+  /* ───── Speed picker ───── */
+  .speed-picker { position: relative; }
+  .speed-pop {
+    position: absolute; top: calc(100% + 8px); right: 0; width: 232px; padding: 12px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: var(--shadow); z-index: 40;
+  }
+  .speed-pop[hidden] { display: none; }
+  .speed-pop-head { font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
+                    color: var(--muted); font-weight: 600; margin-bottom: 9px; }
+  .speed-chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .chip {
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+    font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+    padding: 6px 0; border-radius: 8px; cursor: pointer; text-align: center;
+  }
+  .chip:hover { background: var(--line-soft); color: var(--ink); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .speed-custom { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .speed-readout { font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; width: 42px; text-align: right; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; flex: 1; height: 4px;
+    border-radius: 4px; background: var(--line); outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+
+  /* ───── Voice picker ───── */
+  .voice-picker { position: relative; }
+  .voice-trigger {
+    display: flex; align-items: center; gap: 7px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    font-size: 12.5px; font-family: inherit; font-weight: 500;
+    padding: 8px 11px; border-radius: 9px; cursor: pointer; outline: none;
+  }
+  .voice-trigger:hover { background: var(--line-soft); }
+  .voice-trigger .chev { color: var(--muted); }
+  .voice-menu {
+    position: absolute; top: calc(100% + 8px); right: 0; width: 268px;
+    max-height: 384px; overflow-y: auto; padding: 6px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: var(--shadow); z-index: 40;
+  }
+  .voice-menu[hidden] { display: none; }
+  .vgroup { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+            font-weight: 600; padding: 9px 10px 4px; }
+  .vrow {
+    display: flex; align-items: center; gap: 9px; padding: 7px 8px;
+    border-radius: 9px; cursor: pointer;
+  }
+  .vrow:hover { background: var(--line-soft); }
+  .vrow.selected { background: var(--accent-soft); }
+  .vplay {
+    flex: none; width: 28px; height: 28px; border-radius: 50%;
+    border: 1px solid var(--line); background: var(--surface); color: var(--accent);
+    display: grid; place-items: center; cursor: pointer; transition: background .15s;
+  }
+  .vplay:hover { background: var(--accent); color: #fff; }
+  .vplay svg { width: 13px; height: 13px; }
+  .vplay .vspin { width: 13px; height: 13px; border-radius: 50%;
+                  border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .7s linear infinite; }
+  .vplay:hover .vspin { border-color: rgba(255,255,255,.4); border-top-color: #fff; }
+  .vname { flex: 1; font-size: 13.5px; color: var(--ink); }
+  .vrow.selected .vname { font-weight: 600; }
+  .vcheck { color: var(--accent); width: 15px; height: 15px; flex: none; }
 
   /* ───── Stage ───── */
   .stage { flex: 1; overflow-y: auto; padding: 36px 20px 80px; }
@@ -231,8 +303,25 @@
     <button class="iconbtn" id="theme" title="Toggle light / dark">
       <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
     </button>
-    <button class="speed-btn" id="speedBtn" title="Playback speed">1.0×</button>
-    <select id="voice" title="Voice"></select>
+    <div class="speed-picker">
+      <button class="speed-btn" id="speedBtn" title="Playback speed">1.0×</button>
+      <div class="speed-pop" id="speedPop" hidden>
+        <div class="speed-pop-head">Playback speed</div>
+        <div class="speed-chips" id="speedChips"></div>
+        <div class="speed-custom">
+          <input type="range" id="speedRange" min="0.5" max="2" step="0.05" value="1" />
+          <span class="speed-readout" id="speedReadout">1.00×</span>
+        </div>
+      </div>
+    </div>
+    <div class="voice-picker">
+      <button class="voice-trigger" id="voiceTrigger" title="Choose & preview a voice">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4M7 7v10M11 4v16M15 7v10M19 10v4"/></svg>
+        <span id="voiceCurrent">Heart</span>
+        <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="voice-menu" id="voiceMenu" hidden></div>
+    </div>
   </div>
 </div>
 
@@ -272,12 +361,20 @@ Because everything runs locally with Apple MLX, your text never leaves your comp
 <div class="toast" id="toast"></div>
 
 <script>
+// Backend base URL. Empty string = same origin (local dev, where FastAPI serves
+// this page). For the split deploy (static frontend on Vercel/Netlify), config.js
+// sets window.NARRA_API_BASE to the Hugging Face Space URL. api() builds request URLs.
+const API_BASE = (window.NARRA_API_BASE || "").replace(/\/$/, "");
+const api = (path) => API_BASE + path;
+
 const $ = (id) => document.getElementById(id);
 const audio = $("audio"), reader = $("reader"), textarea = $("text");
 const playBtn = $("play"), playIcon = $("playIcon"), backBtn = $("back"), fwdBtn = $("fwd");
 const track = $("track"), fill = $("fill"), knob = $("knob"), curEl = $("cur"), durEl = $("dur");
-const voiceSel = $("voice"), speedBtn = $("speedBtn"), toggle = $("toggle"), toggleLabel = $("toggleLabel"), toggleIcon = $("toggleIcon");
+const speedBtn = $("speedBtn"), toggle = $("toggle"), toggleLabel = $("toggleLabel"), toggleIcon = $("toggleIcon");
+const speedPop = $("speedPop"), speedChips = $("speedChips"), speedRange = $("speedRange"), speedReadout = $("speedReadout");
 const downloadBtn = $("download"), downloadLabel = $("downloadLabel");
+const voiceTrigger = $("voiceTrigger"), voiceCurrent = $("voiceCurrent"), voiceMenu = $("voiceMenu");
 const overlay = $("overlay"), overlayMsg = $("overlayMsg"), docLabel = $("docLabel"), toast = $("toast");
 const statusEl = $("status");
 const themeBtn = $("theme"), themeIcon = $("themeIcon");
@@ -298,15 +395,21 @@ themeBtn.addEventListener("click", () => {
   applyTheme(next);
 });
 
-const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
-let speedIdx = 1;
+const SPEED_PRESETS = [0.75, 1, 1.25, 1.5, 1.75, 2];
+const SPEED_MIN = 0.5, SPEED_MAX = 2;
+let speed = 1;            // playback rate (preset or custom)
 let tokens = [];          // [{t, ws, s, e, el}]
 let timed = [];           // tokens that have timestamps (for active lookup)
 let activeIdx = -1;
 let mode = "edit";        // "edit" | "read"
 let lastText = "", lastVoice = "", dirty = true;
 let inFlight = null;      // AbortController for the current /api/tts request
-let lastAudioB64 = null;  // base64 WAV of the current clip, for MP3 download
+let lastWavBytes = null;  // Uint8Array WAV of the current clip (for MP3 download)
+let lastUrl = null;       // object URL backing the <audio> source
+let currentVoice = "af_heart";
+const previewAudio = new Audio();   // separate channel for voice previews
+const previewCache = {};            // voice id -> base64 WAV sample
+let previewingId = null;            // voice currently being fetched/played
 
 /* ── helpers ── */
 const fmt = (s) => {
@@ -319,25 +422,142 @@ function showToast(msg) {
   clearTimeout(showToast._t); showToast._t = setTimeout(() => toast.classList.remove("show"), 3200);
 }
 
-/* ── voices ── */
+/* ── preferences: remember text, voice & speed across reloads ── */
+const PREFS_KEY = "narra-prefs";
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch { return {}; }
+}
+function savePrefs() {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ text: textarea.value, voice: currentVoice, speed }));
+  } catch { /* storage full / disabled — non-fatal */ }
+}
+let _prefsTimer = null;
+function savePrefsSoon() { clearTimeout(_prefsTimer); _prefsTimer = setTimeout(savePrefs, 400); }
+
+/* ── voices: a picker with per-voice preview ── */
+const PLAY_ICO = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+const STOP_ICO = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v10H7z"/></svg>';
+const CHECK_ICO = '<svg class="vcheck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+let voicesList = [];
+
 async function loadVoices() {
   try {
-    const { voices } = await (await fetch("/api/voices")).json();
-    let group = "";
-    voices.forEach(v => {
-      const g = `${v.accent} · ${v.gender}`;
-      if (g !== group) { const og = document.createElement("optgroup"); og.label = g; voiceSel.appendChild(og); group = g; }
-      const o = document.createElement("option"); o.value = v.id; o.textContent = v.name;
-      voiceSel.lastChild.appendChild(o);
-    });
-    voiceSel.value = "af_heart";
+    const { voices } = await (await fetch(api("/api/voices"))).json();
+    voicesList = voices;
+    buildVoiceMenu();
+    const want = loadPrefs().voice;
+    setVoice(voicesList.some(v => v.id === want) ? want : "af_heart", { silent: true });
   } catch { showToast("Cannot reach server on :8000"); }
 }
+
+function buildVoiceMenu() {
+  voiceMenu.innerHTML = "";
+  let group = "";
+  voicesList.forEach(v => {
+    const g = `${v.accent} · ${v.gender}`;
+    if (g !== group) {
+      const gl = document.createElement("div"); gl.className = "vgroup"; gl.textContent = g;
+      voiceMenu.appendChild(gl); group = g;
+    }
+    const row = document.createElement("div");
+    row.className = "vrow"; row.dataset.id = v.id;
+    row.innerHTML =
+      `<button class="vplay" data-id="${v.id}" title="Preview ${v.name}">${PLAY_ICO}</button>` +
+      `<span class="vname">${v.name}</span>`;
+    row.addEventListener("click", (e) => {
+      if (e.target.closest(".vplay")) return;       // play button handled separately
+      setVoice(v.id);
+      closeVoiceMenu();
+    });
+    row.querySelector(".vplay").addEventListener("click", (e) => {
+      e.stopPropagation();
+      previewVoice(v.id);
+    });
+    voiceMenu.appendChild(row);
+  });
+  markSelectedRow();
+}
+
+function markSelectedRow() {
+  voiceMenu.querySelectorAll(".vrow").forEach(r => {
+    const sel = r.dataset.id === currentVoice;
+    r.classList.toggle("selected", sel);
+    r.querySelector(".vcheck")?.remove();
+    if (sel) r.insertAdjacentHTML("beforeend", CHECK_ICO);
+  });
+}
+
+function setVoice(id, { silent = false } = {}) {
+  const v = voicesList.find(x => x.id === id);
+  if (!v) return;
+  const changed = currentVoice !== id;
+  currentVoice = id;
+  voiceCurrent.textContent = v.name;
+  markSelectedRow();
+  savePrefs();
+  if (silent) return;
+  dirty = true;
+  // Re-synthesize with the new voice if we already have something on screen.
+  if (changed && (mode === "read" || audio.src)) generate();
+}
+
+/* preview a short sample for a voice without selecting it */
+function setPlayState(id, state) {  // state: 'idle' | 'loading' | 'playing'
+  const btn = voiceMenu.querySelector(`.vplay[data-id="${id}"]`);
+  if (!btn) return;
+  btn.innerHTML = state === "loading" ? '<span class="vspin"></span>'
+                : state === "playing" ? STOP_ICO : PLAY_ICO;
+}
+
+async function previewVoice(id) {
+  // toggle off if this one is already playing
+  if (previewingId === id && !previewAudio.paused) { stopPreview(); return; }
+  stopPreview();
+  const v = voicesList.find(x => x.id === id);
+  previewingId = id;
+  try {
+    if (!previewCache[id]) {
+      setPlayState(id, "loading");
+      const res = await fetch(api("/api/tts"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: `Hi, I'm ${v.name}. This is how I sound.`, voice: id, speed: 1.0 })
+      });
+      if (!res.ok) throw new Error("preview failed");
+      previewCache[id] = (await res.json()).audio;
+    }
+    if (previewingId !== id) return;                // user clicked another meanwhile
+    previewAudio.src = "data:audio/wav;base64," + previewCache[id];
+    setPlayState(id, "playing");
+    audio.pause();                                  // don't talk over the reader
+    await previewAudio.play();
+  } catch {
+    showToast("Could not preview this voice.");
+    setPlayState(id, "idle");
+    previewingId = null;
+  }
+}
+
+function stopPreview() {
+  previewAudio.pause();
+  if (previewingId) { setPlayState(previewingId, "idle"); previewingId = null; }
+}
+previewAudio.addEventListener("ended", () => {
+  if (previewingId) setPlayState(previewingId, "idle");
+  previewingId = null;
+});
+
+/* open / close the menu */
+function openVoiceMenu() { voiceMenu.hidden = false; document.addEventListener("click", onDocClick, true); }
+function closeVoiceMenu() { voiceMenu.hidden = true; stopPreview(); document.removeEventListener("click", onDocClick, true); }
+function onDocClick(e) { if (!e.target.closest(".voice-picker")) closeVoiceMenu(); }
+voiceTrigger.addEventListener("click", () => { voiceMenu.hidden ? openVoiceMenu() : closeVoiceMenu(); });
 
 /* ── render reader tokens ── */
 function renderTokens(toks) {
   reader.innerHTML = "";
   tokens = []; timed = [];
+  resetHighlight();
   const frag = document.createDocumentFragment();
   for (const tk of toks) {
     if (tk.t === "") { if (tk.ws) frag.appendChild(document.createTextNode(tk.ws)); continue; }
@@ -367,27 +587,50 @@ function renderMarks(duration) {
   }
 }
 
-/* ── active-word highlighting ── */
+/* ── active-word highlighting (incremental, O(delta) per frame) ── */
+const stageEl = $("stage");
+let markedSpoken = 0;     // number of leading tokens currently marked "spoken"
+let lastScrollAt = 0;
+
+function resetHighlight() { activeIdx = -1; markedSpoken = 0; }
+
 function updateActive(t) {
-  // binary search the timed tokens for the one covering time t
-  let lo = 0, hi = timed.length - 1, found = -1;
+  const n = timed.length;
+  if (!n) return;
+  // Largest index p with timed[p].s <= t  (binary search).
+  let lo = 0, hi = n - 1, p = -1;
   while (lo <= hi) {
-    const mid = (lo + hi) >> 1, tk = timed[mid];
-    if (t < tk.s) hi = mid - 1;
-    else if (t >= tk.e) lo = mid + 1;
-    else { found = mid; break; }
+    const mid = (lo + hi) >> 1;
+    if (timed[mid].s <= t) { p = mid; lo = mid + 1; } else hi = mid - 1;
   }
-  if (found === activeIdx) return;
+  // Active word = the one we're inside; in a gap, none is active but earlier ones are spoken.
+  const active = (p >= 0 && t < timed[p].e) ? p : -1;
+  const spokenCount = p < 0 ? 0 : (active === p ? p : p + 1);
+
+  // Adjust the spoken prefix incrementally (handles both forward play and backward seek).
+  if (spokenCount > markedSpoken) {
+    for (let i = markedSpoken; i < spokenCount; i++) timed[i].el.classList.add("spoken");
+  } else if (spokenCount < markedSpoken) {
+    for (let i = spokenCount; i < markedSpoken; i++) timed[i].el.classList.remove("spoken");
+  }
+  markedSpoken = spokenCount;
+
+  if (active === activeIdx) return;
   if (activeIdx >= 0 && timed[activeIdx]) timed[activeIdx].el.classList.remove("active");
-  activeIdx = found;
-  if (found >= 0) {
-    const el = timed[found].el;
+  activeIdx = active;
+  if (active >= 0) {
+    const el = timed[active].el;
+    el.classList.remove("spoken");
     el.classList.add("active");
-    // mark everything up to here as spoken
-    for (let i = 0; i < timed.length; i++) timed[i].el.classList.toggle("spoken", i < found);
-    const r = el.getBoundingClientRect(), stage = $("stage").getBoundingClientRect();
-    if (r.top < stage.top + 90 || r.bottom > stage.bottom - 60)
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    // Throttle auto-scroll; only when the word drifts out of the comfortable band.
+    const now = performance.now();
+    if (now - lastScrollAt > 250) {
+      const r = el.getBoundingClientRect(), s = stageEl.getBoundingClientRect();
+      if (r.top < s.top + 90 || r.bottom > s.bottom - 60) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        lastScrollAt = now;
+      }
+    }
   }
 }
 
@@ -395,7 +638,7 @@ function updateActive(t) {
 async function generate() {
   const text = textarea.value.trim();
   if (!text) { showToast("Enter some text first."); return; }
-  const voice = voiceSel.value;
+  const voice = currentVoice;
 
   // Cancel any request already running (e.g. rapid voice switching).
   if (inFlight) inFlight.abort();
@@ -406,7 +649,7 @@ async function generate() {
   overlay.classList.add("show");
   overlayMsg.textContent = "Synthesizing speech…";
   try {
-    const res = await fetch("/api/tts", {
+    const res = await fetch(api("/api/tts"), {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, voice, speed: 1.0 }),
       signal: ctrl.signal
@@ -416,16 +659,20 @@ async function generate() {
     if (ctrl.signal.aborted) return;               // superseded by a newer request
 
     renderTokens(data.tokens);
-    lastAudioB64 = data.audio;
-    audio.src = "data:audio/wav;base64," + data.audio;
-    audio.playbackRate = SPEEDS[speedIdx];
+    // Decode base64 once into a Blob + object URL — lighter and faster to decode
+    // than assigning a multi-megabyte data: URI as the audio source.
+    lastWavBytes = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
+    if (lastUrl) URL.revokeObjectURL(lastUrl);
+    lastUrl = URL.createObjectURL(new Blob([lastWavBytes], { type: "audio/wav" }));
+    audio.src = lastUrl;
+    audio.playbackRate = speed;
     await new Promise((resolve, reject) => {
       audio.onloadedmetadata = resolve;
       audio.onerror = () => reject(new Error("Could not load audio"));
     });
     durEl.textContent = fmt(data.duration);
     renderMarks(data.duration);
-    activeIdx = -1;
+    resetHighlight();
     fill.style.width = "0%"; knob.style.left = "0%"; curEl.textContent = "00:00";
     lastText = text; lastVoice = voice; dirty = false;
     enterRead();
@@ -446,7 +693,7 @@ function enterRead() {
   toggleLabel.textContent = "Edit Text";
   toggleIcon.innerHTML = '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>';
   [playBtn, backBtn, fwdBtn].forEach(b => b.disabled = false);
-  downloadBtn.hidden = !lastAudioB64;
+  downloadBtn.hidden = !lastWavBytes;
 }
 function enterEdit() {
   mode = "edit";
@@ -461,7 +708,7 @@ function enterEdit() {
 function toggleMode() {
   if (mode === "edit") {
     // regenerate if nothing yet, or text/voice changed
-    if (dirty || textarea.value.trim() !== lastText || voiceSel.value !== lastVoice || !audio.src) generate();
+    if (dirty || textarea.value.trim() !== lastText || currentVoice !== lastVoice || !audio.src) generate();
     else enterRead();
   } else enterEdit();
 }
@@ -473,13 +720,12 @@ function fileBase() {
   return (words.replace(/[^\w\-]+/g, "").toLowerCase() || "narra").slice(0, 40);
 }
 async function downloadMp3() {
-  if (!lastAudioB64 || downloadBtn.disabled) return;
-  const wav = Uint8Array.from(atob(lastAudioB64), c => c.charCodeAt(0));
+  if (!lastWavBytes || downloadBtn.disabled) return;
   downloadBtn.disabled = true;
   downloadLabel.textContent = "Preparing…";
   try {
-    const res = await fetch("/api/transcode", {
-      method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav
+    const res = await fetch(api("/api/transcode"), {
+      method: "POST", headers: { "Content-Type": "audio/wav" }, body: lastWavBytes
     });
     if (!res.ok) throw new Error("Transcode failed");
     const blob = await res.blob();
@@ -506,12 +752,32 @@ function setPlayIcon(playing) {
     ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
     : '<path d="M8 5v14l11-7z"/>';
 }
-function cycleSpeed() {
-  speedIdx = (speedIdx + 1) % SPEEDS.length;
-  const s = SPEEDS[speedIdx];
-  speedBtn.textContent = (Number.isInteger(s) ? s.toFixed(1) : s) + "×";
-  audio.playbackRate = s;
+const fmtSpeed = (s) => (Number.isInteger(s) ? s.toFixed(1) : String(+s.toFixed(2))) + "×";
+function buildSpeedChips() {
+  speedChips.innerHTML = "";
+  SPEED_PRESETS.forEach(p => {
+    const c = document.createElement("button");
+    c.className = "chip"; c.dataset.v = p; c.textContent = fmtSpeed(p);
+    c.addEventListener("click", () => setSpeed(p));
+    speedChips.appendChild(c);
+  });
 }
+function setSpeed(v, { save = true } = {}) {
+  speed = Math.min(SPEED_MAX, Math.max(SPEED_MIN, +v));
+  audio.playbackRate = speed;
+  // Reflect everywhere
+  speedBtn.textContent = fmtSpeed(speed);
+  speedReadout.textContent = speed.toFixed(2) + "×";
+  speedRange.value = speed;
+  const isPreset = SPEED_PRESETS.includes(speed);
+  speedBtn.classList.toggle("custom", !isPreset);
+  speedChips.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", +c.dataset.v === speed));
+  if (save) savePrefsSoon();   // debounced — slider "input" fires many times per drag
+}
+function openSpeedPop() { speedPop.hidden = false; document.addEventListener("click", onSpeedDocClick, true); }
+function closeSpeedPop() { speedPop.hidden = true; document.removeEventListener("click", onSpeedDocClick, true); }
+function onSpeedDocClick(e) { if (!e.target.closest(".speed-picker")) closeSpeedPop(); }
+speedRange.addEventListener("input", () => setSpeed(speedRange.value));
 
 /* ── seeking ── */
 function seekFromEvent(e) {
@@ -524,17 +790,27 @@ track.addEventListener("mousedown", (e) => { if (!playBtn.disabled) { scrubbing 
 window.addEventListener("mousemove", (e) => { if (scrubbing) seekFromEvent(e); });
 window.addEventListener("mouseup", () => { scrubbing = false; });
 
-/* ── audio events ── */
-audio.addEventListener("timeupdate", () => {
+/* ── render loop ──
+   While playing we drive updates with requestAnimationFrame for smooth, frame-aligned
+   highlighting (timeupdate alone fires only ~4×/sec). When paused/seeking we render once. */
+let rafId = 0, lastSecShown = -1;
+function renderFrame() {
   const d = audio.duration || 0, t = audio.currentTime;
   const pct = d ? (t / d) * 100 : 0;
   fill.style.width = pct + "%"; knob.style.left = pct + "%";
-  curEl.textContent = fmt(t);
+  const sec = t | 0;
+  if (sec !== lastSecShown) { curEl.textContent = fmt(t); lastSecShown = sec; }
   updateActive(t);
-});
-audio.addEventListener("play", () => setPlayIcon(true));
-audio.addEventListener("pause", () => setPlayIcon(false));
-audio.addEventListener("ended", () => { setPlayIcon(false); });
+}
+function loop() { renderFrame(); rafId = requestAnimationFrame(loop); }
+function startLoop() { if (!rafId) rafId = requestAnimationFrame(loop); }
+function stopLoop() { if (rafId) { cancelAnimationFrame(rafId); rafId = 0; } renderFrame(); }
+
+audio.addEventListener("play", () => { setPlayIcon(true); stopPreview(); startLoop(); });
+audio.addEventListener("pause", () => { setPlayIcon(false); stopLoop(); });
+audio.addEventListener("ended", () => { setPlayIcon(false); stopLoop(); });
+audio.addEventListener("seeking", renderFrame);   // keep highlight live while scrubbing paused
+audio.addEventListener("timeupdate", () => { if (!rafId) renderFrame(); });
 
 /* click a word → seek */
 reader.addEventListener("click", (e) => {
@@ -547,15 +823,11 @@ reader.addEventListener("click", (e) => {
 playBtn.addEventListener("click", togglePlay);
 backBtn.addEventListener("click", () => audio.currentTime = Math.max(0, audio.currentTime - 10));
 fwdBtn.addEventListener("click", () => audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10));
-speedBtn.addEventListener("click", cycleSpeed);
+speedBtn.addEventListener("click", () => { speedPop.hidden ? openSpeedPop() : closeSpeedPop(); });
 toggle.addEventListener("click", toggleMode);
 downloadBtn.addEventListener("click", downloadMp3);
-textarea.addEventListener("input", () => { dirty = true; });
-// Switching voice re-synthesizes immediately with the same text.
-voiceSel.addEventListener("change", () => {
-  dirty = true;
-  if (mode === "read" || audio.src) generate();
-});
+textarea.addEventListener("input", () => { dirty = true; savePrefsSoon(); });
+// (Voice selection + re-synthesis is handled by setVoice in the picker.)
 
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); generate(); return; }
@@ -568,7 +840,7 @@ document.addEventListener("keydown", (e) => {
 /* ── warmup status (so the user knows when it's instant-ready) ── */
 async function pollWarmup() {
   try {
-    const h = await (await fetch("/api/health")).json();
+    const h = await (await fetch(api("/api/health"))).json();
     const w = h.warmup || {};
     if (w.ready) { statusEl.textContent = "Ready · MLX"; return; }
     if (w.engine) statusEl.textContent = `Loading voices ${w.voices_ready}/${w.voices_total}…`;
@@ -578,7 +850,13 @@ async function pollWarmup() {
   setTimeout(pollWarmup, 1200);
 }
 
-loadVoices();
+/* ── restore saved session (text, speed, voice) ── */
+const startupPrefs = loadPrefs();
+if (typeof startupPrefs.text === "string") textarea.value = startupPrefs.text;
+buildSpeedChips();
+setSpeed(typeof startupPrefs.speed === "number" ? startupPrefs.speed : 1, { save: false });
+
+loadVoices();   // restores saved voice once the list loads
 pollWarmup();
 </script>
 </body>

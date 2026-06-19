@@ -16,3 +16,13 @@ __pycache__/
 
 # Logs
 *.log
+
+# Secrets / env (never commit real keys — use .env.example as the template)
+.env
+.env.local
+.env.*.local
+
+# Deploy / Node tooling (Vercel & Netlify CLIs)
+.vercel/
+.netlify/
+node_modules/

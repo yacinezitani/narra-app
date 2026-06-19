@@ -1,0 +1,19 @@
+# Netlify deploy of the Narra frontend only (static, no build).
+# The TTS backend is NOT deployed here — it runs on Hugging Face Spaces.
+# Point frontend/config.js at that Space URL before deploying.
+
+[build]
+  publish = "frontend"
+  command = ""
+
+# Long-cache the static assets, but always revalidate the HTML and the runtime
+# config so a backend-URL change goes live immediately.
+[[headers]]
+  for = "/config.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
