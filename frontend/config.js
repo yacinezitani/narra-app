@@ -1,10 +1,13 @@
-// Narra frontend runtime config.
+// Narra frontend runtime config — picks the backend automatically by host:
 //
-// This is the ONE file you edit per deployment — no build step needed.
+//   • localhost / 127.0.0.1  → "" (same origin): local dev hits your local backend.
+//   • *.hf.space             → "" (same origin): the HF Space serves this page itself.
+//   • anything else (Netlify)→ the HF Space backend URL.
 //
-//   • Local dev (FastAPI serves this page):  leave it empty ("") = same origin.
-//   • Static deploy (Vercel / Netlify):      set it to your backend's URL, i.e.
-//     the Hugging Face Space, e.g. "https://yourname-narra-tts.hf.space".
-//
-// The backend must allow this site's origin via its ALLOWED_ORIGINS env var.
-window.NARRA_API_BASE = "";
+// So local dev, the Space's own UI, and the Netlify deploy all work from one file.
+// If your Space URL changes, update the one string below.
+(function () {
+  var h = location.hostname;
+  var sameOrigin = h === "localhost" || h === "127.0.0.1" || h === "" || h.endsWith(".hf.space");
+  window.NARRA_API_BASE = sameOrigin ? "" : "https://zitani47-narra-tts.hf.space";
+})();
