@@ -18,7 +18,7 @@ import threading
 from pathlib import Path
 
 import soundfile as sf
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from backend.auth import enforce_quota, get_user_id
 from backend.billing import BILLING_ENABLED
 from backend.billing import router as billing_router
+from backend.ratelimit import enforce_rate_limit, is_owner
 from backend.engines import (
     SAMPLE_RATE,
     VALID_VOICE_IDS,
@@ -92,7 +93,12 @@ def voices():
 
 
 @app.post("/api/tts")
-async def tts(req: TTSRequest, user_id: str | None = Depends(get_user_id)):
+async def tts(
+    req: TTSRequest,
+    request: Request,
+    user_id: str | None = Depends(get_user_id),
+    x_narra_key: str | None = Header(default=None),
+):
     """Generate speech and return audio plus a word-level timeline.
 
     Response JSON:
@@ -104,15 +110,21 @@ async def tts(req: TTSRequest, user_id: str | None = Depends(get_user_id)):
         }
     Audio and timeline are returned together so the client renders both atomically.
 
-    When auth is enabled, the request must carry a valid Supabase bearer token and
-    is metered against the user's plan quota *before* synthesis (so we never spend
-    GPU/CPU on a request that's over the cap). In open local mode this is a no-op.
+    Protection layers, applied before any synthesis so we never spend compute on a
+    rejected request:
+      1. Owner bypass — a request with the X-Narra-Key owner secret skips all limits.
+      2. Rate limit  — per-IP sliding window (protects the free backend from abuse).
+      3. Quota       — per-user plan cap, only when Supabase auth is enabled.
     """
     if req.voice not in VALID_VOICE_IDS:
         raise HTTPException(400, f"Unknown voice '{req.voice}'")
 
+    owner = is_owner(x_narra_key)
+    enforce_rate_limit(request, owner)
+
     text = req.text.strip()
-    await enforce_quota(user_id, len(text))
+    if not owner:
+        await enforce_quota(user_id, len(text))
 
     try:
         wav, tokens = synthesize(engine, text, req.voice, req.speed)

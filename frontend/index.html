@@ -272,7 +272,7 @@
 <div class="toolbar">
   <div class="brand">
     <div class="mark">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M3 10v4M7 6v12M11 3v18M15 7v10M19 10v4"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 3.5h14A2.5 2.5 0 0 1 21.5 6v8A2.5 2.5 0 0 1 19 16.5h-8l-4.2 3.6A1 1 0 0 1 5.2 19.3V16.5H5A2.5 2.5 0 0 1 2.5 14V6A2.5 2.5 0 0 1 5 3.5Z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><g fill="#fff"><rect x="6.2" y="7.4" width="7" height="1.7" rx="0.85"/><rect x="6.2" y="10.4" width="9.2" height="1.9" rx="0.95"/><rect x="6.2" y="13.4" width="5.2" height="1.7" rx="0.85"/></g></svg>
     </div>
     <div><b>Narra</b><small id="status">Read-along · MLX</small></div>
   </div>
@@ -366,6 +366,22 @@ Because everything runs locally with Apple MLX, your text never leaves your comp
 // sets window.NARRA_API_BASE to the Hugging Face Space URL. api() builds request URLs.
 const API_BASE = (window.NARRA_API_BASE || "").replace(/\/$/, "");
 const api = (path) => API_BASE + path;
+
+// Owner key → unlimited access (bypasses rate limit + quota). Stored only in
+// THIS browser's localStorage, so visitors never get it. Set it once via the
+// console:  narraSetOwnerKey("your-secret")   ·  clear with narraSetOwnerKey(null)
+window.narraSetOwnerKey = (k) => {
+  if (k) localStorage.setItem("narra-owner-key", k);
+  else localStorage.removeItem("narra-owner-key");
+  return "ok";
+};
+// Build request headers, attaching the owner key when present.
+const jsonHeaders = () => {
+  const h = { "Content-Type": "application/json" };
+  const key = localStorage.getItem("narra-owner-key");
+  if (key) h["X-Narra-Key"] = key;
+  return h;
+};
 
 const $ = (id) => document.getElementById(id);
 const audio = $("audio"), reader = $("reader"), textarea = $("text");
@@ -520,7 +536,7 @@ async function previewVoice(id) {
     if (!previewCache[id]) {
       setPlayState(id, "loading");
       const res = await fetch(api("/api/tts"), {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: jsonHeaders(),
         body: JSON.stringify({ text: `Hi, I'm ${v.name}. This is how I sound.`, voice: id, speed: 1.0 })
       });
       if (!res.ok) throw new Error("preview failed");
@@ -650,7 +666,7 @@ async function generate() {
   overlayMsg.textContent = "Synthesizing speech…";
   try {
     const res = await fetch(api("/api/tts"), {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: jsonHeaders(),
       body: JSON.stringify({ text, voice, speed: 1.0 }),
       signal: ctrl.signal
     });

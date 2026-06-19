@@ -1,16 +1,27 @@
 <svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Narra">
   <defs>
-    <linearGradient id="narra" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#2F6BFF"/>
-      <stop offset="1" stop-color="#7C5CFF"/>
+    <linearGradient id="narraTile" x1="8" y1="6" x2="88" y2="90" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B6BFF"/>
+      <stop offset="1" stop-color="#8A5CFF"/>
     </linearGradient>
+    <filter id="narraShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.4" flood-color="#0b1b48" flood-opacity="0.28"/>
+    </filter>
   </defs>
-  <rect width="96" height="96" rx="24" fill="url(#narra)"/>
-  <g stroke="#fff" stroke-width="6" stroke-linecap="round">
-    <path d="M24 40v16"/>
-    <path d="M36 30v36"/>
-    <path d="M48 20v56"/>
-    <path d="M60 30v36"/>
-    <path d="M72 40v16"/>
+
+  <!-- App tile -->
+  <rect width="96" height="96" rx="23" fill="url(#narraTile)"/>
+
+  <!-- Speech bubble = spoken text -->
+  <g filter="url(#narraShadow)">
+    <path fill="#ffffff" d="M30 22h36a12 12 0 0 1 12 12v18a12 12 0 0 1-12 12H45l-12.5 11.5A2.4 2.4 0 0 1 28.6 73.7V64H30a12 12 0 0 1-12-12V34a12 12 0 0 1 12-12Z"/>
+  </g>
+
+  <!-- Read-along text lines; the middle one is the "active word" in the app's
+       highlight green, the signature of Narra's word-by-word read-along. -->
+  <g>
+    <rect x="31" y="33"  width="26" height="6" rx="3" fill="#C2CEEC"/>
+    <rect x="31" y="44"  width="34" height="7" rx="3.5" fill="#3FC56B"/>
+    <rect x="31" y="56"  width="20" height="6" rx="3" fill="#C2CEEC"/>
   </g>
 </svg>
